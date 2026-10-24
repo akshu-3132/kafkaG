@@ -1,0 +1,13 @@
+
+# Go build outputs
+*.exe
+*.test
+/bin/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# VS Code settings
+.vscode/
