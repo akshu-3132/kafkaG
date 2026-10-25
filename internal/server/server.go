@@ -50,6 +50,23 @@ func (s *Server) handleConnection(conn net.Conn) {
 			}
 			return
 		}
-		fmt.Println("Received frame from client:", string(frame.Payload))
+		request, err := protocol.Decode(frame.Payload)
+		if err != nil {
+			fmt.Println("Error decoding request:", err)
+			return
+		}
+		fmt.Println("Received request from client:", string(request.Body))
+		response := protocol.Response{
+			CorrelationID: request.CorrelationID,
+			ErrorCode:     0,
+			Body:          []byte("Hello, Client!"),
+		}
+		responseFrame := protocol.Frame{
+			Payload: response.Encode(),
+		}
+		if err := responseFrame.WriteTo(conn); err != nil {
+			fmt.Println("Error sending response:", err)
+			return
+		}
 	}
 }
