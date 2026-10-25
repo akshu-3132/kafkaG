@@ -19,7 +19,7 @@ func (f *Frame) Encode() []byte {
 
 func (f *Frame) Decode(data []byte) (*Frame, error) {
 	if len(data) < 4 {
-		return nil, fmt.Errorf("data too short to decode frame")
+		return nil, fmt.Errorf("data too short")
 	}
 	length := binary.BigEndian.Uint32(data[0:4])
 	if len(data) < int(4+length) {
@@ -32,8 +32,18 @@ func (f *Frame) Decode(data []byte) (*Frame, error) {
 
 func (f *Frame) WriteTo(w io.Writer) error {
 	data := f.Encode()
-	_, err := w.Write(data)
-	return err
+
+	for len(data) > 0 {
+		n, err := w.Write(data)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return io.ErrShortWrite
+		}
+		data = data[n:]
+	}
+	return nil
 }
 
 func ReadFrame(r io.Reader) (*Frame, error) {
