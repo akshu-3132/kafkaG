@@ -13,11 +13,16 @@ func main() {
 		return
 	}
 	defer conn.Close()
-
-	frame := protocol.Frame{Payload: []byte("Hello, Broker!")}
-	err = frame.WriteTo(conn)
-	if err != nil {
-		panic(err)
+	messages := []string{
+		"Hello, Broker!",
+		"This is a test message.",
+		"Goodbye, Broker!",
 	}
-	fmt.Println("Sent frame to broker:", string(frame.Payload))
+	for _, msg := range messages {
+		frame := protocol.Frame{Payload: []byte(msg)}
+		if err := frame.WriteTo(conn); err != nil {
+			fmt.Println("Failed to send message:", err)
+			return
+		}
+	}
 }

@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"io"
 	"net"
 
 	"kafkaG/internal/protocol"
@@ -38,14 +39,17 @@ func (s *Server) Start() error {
 
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
-
 	fmt.Println("Client connected:", conn.RemoteAddr())
-
-	frame, err := protocol.ReadFrame(conn)
-	if err != nil {
-		fmt.Println("Failed to read frame:", err)
-		return
+	for {
+		frame, err := protocol.ReadFrame(conn)
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println("Client Disconnected")
+			} else {
+				fmt.Println("Error occured while reading frame")
+			}
+			return
+		}
+		fmt.Println("Received frame from client:", string(frame.Payload))
 	}
-
-	fmt.Println("Received:", string(frame.Payload))
 }
