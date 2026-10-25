@@ -13,29 +13,32 @@ func main() {
 		return
 	}
 	defer conn.Close()
-	request := protocol.Request{
-		APIKey:        0,
-		Version:       0,
-		CorrelationID: 0,
-		Body:          []byte("Hello, Broker!"),
+	for i := 0; i < 10; i++ {
+		request := protocol.Request{
+			APIKey:        0,
+			Version:       0,
+			CorrelationID: int32(i),
+			Body:          []byte("Message + " + string(i)),
+		}
+		frame := protocol.Frame{
+			Payload: request.Encode(),
+		}
+		if err := frame.WriteTo(conn); err != nil {
+			fmt.Println("Failed to send request", err)
+			return
+		}
+		responseFrame, err := protocol.ReadFrame(conn)
+		if err != nil {
+			fmt.Println("Failed to read response frame", err)
+			return
+		}
+		response, err := protocol.DecodeResponse(responseFrame.Payload)
+		if err != nil {
+			fmt.Println("Failed to decode response", err)
+			return
+		}
+		fmt.Println("Request ID:", response.CorrelationID, "ResponseId:", response.CorrelationID, "Response Body:", string(response.Body))
+
 	}
-	frame := protocol.Frame{
-		Payload: request.Encode(),
-	}
-	if err := frame.WriteTo(conn); err != nil {
-		fmt.Println("Failed to send frame:", err)
-		return
-	}
-	ResponseFrame, err := protocol.ReadFrame(conn)
-	if err != nil {
-		fmt.Println("Failed to read frame:", err)
-		return
-	}
-	response, err := protocol.DecodeResponse(ResponseFrame.Payload)
-	if err != nil {
-		fmt.Println("Failed to decode response:", err)
-		return
-	}
-	fmt.Println("Received response from server:", string(response.Body))
 
 }
