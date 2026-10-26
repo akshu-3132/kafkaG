@@ -14,12 +14,17 @@ func main() {
 	}
 	defer conn.Close()
 	for i := 0; i < 10; i++ {
-		request := protocol.Request{
-			APIKey:        0,
-			Version:       0,
-			CorrelationID: int32(i),
-			Body:          []byte("Message + " + string(i)),
+		producerequest := protocol.ProduceRequest{
+			Topic:   "test-topic",
+			Message: []byte(fmt.Sprintf("Hello Kafka %d", i)),
 		}
+		request := protocol.Request{
+			APIKey:        1,
+			Version:       1,
+			CorrelationID: int32(i),
+			Body:          producerequest.Encode(),
+		}
+
 		frame := protocol.Frame{
 			Payload: request.Encode(),
 		}

@@ -50,23 +50,32 @@ func (s *Server) handleConnection(conn net.Conn) {
 			}
 			return
 		}
-		request, err := protocol.Decode(frame.Payload)
+		req, err := protocol.Decode(frame.Payload)
 		if err != nil {
-			fmt.Println("Error decoding request:", err)
+			fmt.Println("Error occured while decoding request:", err)
 			return
 		}
-		fmt.Println("Received request from client:", string(request.Body))
-		response := protocol.Response{
-			CorrelationID: request.CorrelationID,
-			ErrorCode:     0,
-			Body:          []byte("Hello, Client!"),
+		res, err := s.handleRequest(req)
+		if err != nil {
+			fmt.Println("Error occured while handling request:", err)
 		}
-		responseFrame := protocol.Frame{
-			Payload: response.Encode(),
+		fmt.Println("Response:", res)
+		if res == nil {
+			fmt.Println("Response is nil, skipping sending response")
+			continue
+		}
+		responsePayload, err := res.Encode()
+		if err != nil {
+			fmt.Println("Error occured while encoding response:", err)
+			return
+		}
+		responseFrame := &protocol.Frame{
+			Payload: responsePayload,
 		}
 		if err := responseFrame.WriteTo(conn); err != nil {
-			fmt.Println("Error sending response:", err)
+			fmt.Println("Error occured while writing response frame:", err)
 			return
 		}
+
 	}
 }
