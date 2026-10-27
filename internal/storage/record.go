@@ -16,6 +16,9 @@ func (r *Record) Encode() ([]byte, error) {
 	if uint64(len(r.Message)) > uint64(^uint32(0)) {
 		return nil, fmt.Errorf("message too large")
 	}
+	if len(r.Message) <= 0 {
+		return nil, fmt.Errorf("message is empty")
+	}
 	buffer := make([]byte, recordHeaderSize+len(r.Message))
 	binary.BigEndian.PutUint64(buffer[0:8], uint64(r.Timestamp))
 	binary.BigEndian.PutUint32(buffer[8:12], uint32(len(r.Message)))
