@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type FileLog struct {
@@ -36,18 +37,33 @@ func (fl *FileLog) Append(record *Record) {
 	fl.ByteOffset += int64(len(recordBytes))
 }
 
-func OpenFileLog(filepath string) (*FileLog, error) {
-	file, err := os.OpenFile(filepath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open log file: %v", err)
+func OpenFileLog(filePath string) (*FileLog, error) {
+	dirPath := filepath.Dir(filePath)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create log directory: %w", err)
 	}
-	currentByteOffset, err := file.Stat()
+	file, err := os.OpenFile(
+		filePath,
+		os.O_APPEND|os.O_CREATE|os.O_RDWR,
+		0644,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open log file: %w", err)
+	}
+	info, err := file.Stat()
 	if err != nil {
 		file.Close()
-		return nil, fmt.Errorf("failed to get file info: %v", err)
+		return nil, fmt.Errorf("failed to get file info: %w", err)
 	}
 	return &FileLog{
 		File:       file,
-		ByteOffset: currentByteOffset.Size(),
+		ByteOffset: info.Size(),
 	}, nil
+}
+
+func (fl *FileLog) Close() error {
+	if fl.File != nil {
+		return fl.File.Close()
+	}
+	return nil
 }
