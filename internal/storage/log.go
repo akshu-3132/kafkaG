@@ -10,6 +10,7 @@ import (
 type FileLog struct {
 	File       *os.File
 	ByteOffset int64
+	Index      *Index
 }
 
 func (fl *FileLog) Append(record *Record) (int64, error) {
@@ -30,9 +31,9 @@ func (fl *FileLog) Append(record *Record) (int64, error) {
 		}
 		bytesToWrite -= bytesWritten
 	}
-	tempOffset := fl.ByteOffset
+	logicalOffset := fl.Index.AddEntry(fl.ByteOffset)
 	fl.ByteOffset += int64(len(recordBytes))
-	return tempOffset, nil
+	return logicalOffset, nil
 }
 
 func OpenFileLog(filePath string) (*FileLog, error) {
@@ -56,6 +57,7 @@ func OpenFileLog(filePath string) (*FileLog, error) {
 	return &FileLog{
 		File:       file,
 		ByteOffset: info.Size(),
+		Index:      NewIndex(),
 	}, nil
 }
 
@@ -66,7 +68,11 @@ func (fl *FileLog) Close() error {
 	return nil
 }
 
-func (fl *FileLog) ReadAt(byteOffset int64) (*Record, error) {
+func (fl *FileLog) ReadAt(logicalOffset int64) (*Record, error) {
+	byteOffset, ok := fl.Index.Get(logicalOffset)
+	if !ok {
+		return nil, fmt.Errorf("invalid logical offset: %d", logicalOffset)
+	}
 	if fl.File == nil {
 		return nil, fmt.Errorf("file is not open")
 	}
@@ -86,7 +92,7 @@ func (fl *FileLog) ReadAt(byteOffset int64) (*Record, error) {
 	}
 	recordBuffer := make([]byte, recordHeaderSize+int(messageSize))
 	if messageSize > 0 {
-		_, err = fl.File.ReadAt(recordBuffer, byteOffset)
+		_, err := fl.File.ReadAt(recordBuffer, byteOffset)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read record payload: %w", err)
 		}
