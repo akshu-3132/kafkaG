@@ -9,10 +9,10 @@ type FetchRequest struct {
 	Offset int64
 }
 
-func (fr *FetchRequest) Encode() ([]byte, error) {
+func (fr *FetchRequest) Encode() []byte {
 	buffer := make([]byte, 8)
 	binary.BigEndian.PutUint64(buffer, uint64(fr.Offset))
-	return buffer, nil
+	return buffer
 }
 
 func DecodeFetchRequest(data []byte) (*FetchRequest, error) {

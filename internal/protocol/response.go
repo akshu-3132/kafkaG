@@ -11,12 +11,12 @@ type Response struct {
 	Body          []byte
 }
 
-func (r *Response) Encode() ([]byte, error) {
+func (r *Response) Encode() []byte {
 	buffer := make([]byte, 4+2+len(r.Body))
 	binary.BigEndian.PutUint32(buffer[0:4], uint32(r.CorrelationID))
 	binary.BigEndian.PutUint16(buffer[4:6], uint16(r.ErrorCode))
 	copy(buffer[6:], r.Body)
-	return buffer, nil
+	return buffer
 }
 
 func DecodeResponse(data []byte) (*Response, error) {
