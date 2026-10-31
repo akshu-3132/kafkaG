@@ -11,11 +11,18 @@ import (
 
 type Server struct {
 	addr string
+	log  *storage.FileLog
 }
 
 func New(addr string) *Server {
+	fl, err := storage.OpenFileLog("./data/test.log")
+	if err != nil {
+		fmt.Println("Error opening log:", err)
+		return nil
+	}
 	return &Server{
 		addr: addr,
+		log:  fl,
 	}
 }
 
@@ -42,14 +49,6 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	fmt.Println("Client connected:", conn.RemoteAddr())
-
-	fl, err := storage.OpenFileLog("./data/test.log")
-	if err != nil {
-		fmt.Println("Error opening log:", err)
-		return
-	}
-	defer fl.Close()
-
 	for {
 		frame, err := protocol.ReadFrame(conn)
 		if err != nil {
@@ -78,7 +77,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 				Timestamp: time.Now().Unix(),
 				Message:   produceRequest.Message,
 			}
-			offset, err := fl.Append(record)
+			offset, err := s.log.Append(record)
 			if err != nil {
 				fmt.Println("Error appending record:", err)
 				return
@@ -98,7 +97,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 				fmt.Println("Error decoding fetch request:", err)
 				return
 			}
-			record, err := fl.ReadAt(fetchRequest.Offset)
+			record, err := s.log.ReadAt(fetchRequest.Offset)
 			if err != nil {
 				fmt.Println("Error reading record:", err)
 				return
