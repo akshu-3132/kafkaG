@@ -80,11 +80,51 @@ func OpenFileLog(filePath string) (*FileLog, error) {
 		return nil, fmt.Errorf("failed to create log index: %w", err)
 	}
 
+	// Recover the next offset by starting at the last index entry and
+	// scanning the remaining records.
+	indexInfo, err := index.File.Stat()
+	if err != nil {
+		file.Close()
+		return nil, fmt.Errorf("failed to get index file info: %w", err)
+	}
+
+	entryCount := indexInfo.Size() / 16 // each index entry is 16 bytes
+	index.EntryCount = entryCount
+
+	nextOffset := int64(0)
+	nextByteOffset := int64(0)
+	if entryCount > 0 {
+		lastEntry, err := index.ReadEntryAt(entryCount - 1)
+		if err != nil {
+			file.Close()
+			return nil, fmt.Errorf("failed to read last index entry: %w", err)
+		}
+
+		// lastEntry is the last indexed record so scan forward from it.
+		nextOffset = lastEntry.Offset
+		nextByteOffset = lastEntry.ByteOffset
+		index.LastIndexedByteOffset = nextByteOffset
+
+		header := make([]byte, recordHeaderSize)
+		for nextByteOffset < info.Size() {
+			if _, err := file.ReadAt(header, nextByteOffset); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				file.Close()
+				return nil, fmt.Errorf("failed to read record header during recovery: %w", err)
+			}
+			messageSize := int64(binary.BigEndian.Uint32(header[8:12]))
+			nextByteOffset += recordHeaderSize + messageSize
+			nextOffset++
+		}
+	}
+
 	return &FileLog{
 		File:       file,
 		ByteOffset: info.Size(),
 		Index:      index,
-		Offset:     0,
+		Offset:     nextOffset,
 	}, nil
 }
 
