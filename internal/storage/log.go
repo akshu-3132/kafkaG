@@ -12,31 +12,29 @@ import (
 type FileLog struct {
 	File       *os.File
 	ByteOffset int64
-	Offset     int64
 }
 
 // appends a record to the end fo the log file
 
-func (fl *FileLog) Append(record *Record) (int64, error) {
+func (fl *FileLog) Append(record *Record) error {
 	// TODO update this method to handle the partial failure write, needs to rollback i guess
 	bbuffer, err := record.Encode()
 	if err != nil {
-		return -1, fmt.Errorf("failed to encode record: %w", err)
+		return fmt.Errorf("failed to encode record: %w", err)
 	}
 	bytesToBeWritten := len(bbuffer)
 	for bytesToBeWritten > 0 {
 		bytesWritten, err := fl.File.Write(bbuffer[len(bbuffer)-bytesToBeWritten:])
 		if err != nil {
-			return -1, fmt.Errorf("failed to write record to log file: %w", err)
+			return fmt.Errorf("failed to write record to log file: %w", err)
 		}
 		if bytesWritten == 0 {
-			return -1, fmt.Errorf("no bytes written to log file")
+			return fmt.Errorf("no bytes written to log file")
 		}
 		bytesToBeWritten -= bytesWritten
 	}
 	fl.ByteOffset += int64(len(bbuffer))
-	fl.Offset++
-	return fl.Offset - 1, nil
+	return nil
 }
 
 func OpenFileLog(filePath string) (*FileLog, error) {
@@ -110,7 +108,6 @@ func OpenFileLog(filePath string) (*FileLog, error) {
 	return &FileLog{
 		File:       file,
 		ByteOffset: info.Size(),
-		Offset:     nextOffset,
 	}, nil
 }
 

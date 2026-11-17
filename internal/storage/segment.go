@@ -6,8 +6,10 @@ import (
 )
 
 type Segment struct {
-	Log   *FileLog
-	Index *Index
+	Log         *FileLog
+	Index       *Index
+	FirstOffset int64
+	LastOffset  int64
 }
 
 func NewSegment(dirPath string, offset int64) (*Segment, error) {
@@ -27,19 +29,21 @@ func NewSegment(dirPath string, offset int64) (*Segment, error) {
 	}
 
 	return &Segment{
-		Log:   log,
-		Index: index,
+		Log:         log,
+		Index:       index,
+		FirstOffset: offset,
+		LastOffset:  offset,
 	}, nil
 }
 
-func (s *Segment) WriteRecord(record *Record) (int64, error) {
-	offset, err := s.Log.Append(record)
+func (s *Segment) writeRecord(record *Record) (int64, error) {
+	err := s.Log.Append(record)
 	if err != nil {
 		return -1, fmt.Errorf("failed to write record: %w", err)
 	}
 	if s.Index.ShouldIndexEntry(s.Log.ByteOffset) {
 		indexEntry := &IndexEntry{
-			Offset:     offset,
+			Offset:     s.LastOffset,
 			ByteOffset: s.Log.ByteOffset,
 		}
 		if err := s.Index.AddEntry(indexEntry.encode()); err != nil {
@@ -47,12 +51,14 @@ func (s *Segment) WriteRecord(record *Record) (int64, error) {
 		}
 		s.Index.LastIndexedByteOffset = s.Log.ByteOffset
 	}
-	return offset, nil
+	currentOffset := s.LastOffset
+	s.LastOffset++
+	return currentOffset, nil
 }
 
 // readrecord from the .log file
 // uses .index file to get the exact or closest offset
-func (s *Segment) ReadRecord(offset int64) (*Record, error) {
+func (s *Segment) readRecord(offset int64) (*Record, error) {
 	indexEntry, isPresent := s.Index.GetEntry(offset)
 	var (
 		record *Record
