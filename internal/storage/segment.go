@@ -17,6 +17,9 @@ func NewSegment(dirPath string, offset int64) (*Segment, error) {
 	indexFilePath := filepath.Join(dirPath, segmentName+".index")
 	logFilePath := filepath.Join(dirPath, segmentName+".log")
 
+	absPath, err := filepath.Abs(dirPath)
+	println("Absolute path of the directory:", absPath)
+
 	log, err := OpenFileLog(logFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
@@ -50,7 +53,9 @@ func (s *Segment) writeRecord(record *Record) (int64, error) {
 		if err := s.Index.AddEntry(indexEntry.encode()); err != nil {
 			return -1, fmt.Errorf("failed to add index entry: %w", err)
 		}
+
 		s.Index.LastIndexedByteOffset = s.Log.ByteOffset
+		s.Index.EntryCount++
 	}
 	currentOffset := s.NextOffset
 	s.NextOffset++
@@ -77,8 +82,8 @@ func (s *Segment) readRecord(offset int64) (*Record, error) {
 }
 
 func RecoverSegment(filePath string, startingOffset int64) (*Segment, error) {
-	logFilePath := filepath.Join(filePath, ".log")
-	indexFilePath := filepath.Join(filePath, ".index")
+	logFilePath := filePath + ".log"
+	indexFilePath := filePath + ".index"
 	log, err := OpenFileLog(logFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
@@ -111,6 +116,8 @@ func RecoverSegment(filePath string, startingOffset int64) (*Segment, error) {
 			return nil, fmt.Errorf("failed to read last index entry: %w", err)
 		}
 
+		index.LastIndexedByteOffset = lastEntry.ByteOffset
+
 		// read the last entry to move on
 		record, err := log.read(lastEntry.ByteOffset)
 		if err != nil {
@@ -142,6 +149,9 @@ func RecoverSegment(filePath string, startingOffset int64) (*Segment, error) {
 		byteOffset += recordHeaderSize + int64(len(record.Message))
 		nextOffset++
 	}
+
+	log.ByteOffset = byteOffset
+	index.EntryCount = entryCount
 
 	return &Segment{
 		Log:         log,

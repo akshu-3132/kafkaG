@@ -25,7 +25,7 @@ func OpenIndex(FilePath string) (*Index, error) {
 	return &Index{
 		File:                  file,
 		LastIndexedByteOffset: 0,
-		IndexInterval:         1000, // TODO get value from config
+		IndexInterval:         100, // TODO get value from config
 		EntryCount:            0,
 	}, nil
 }
@@ -60,7 +60,7 @@ func (idx *Index) AddEntry(Bytes []byte) error {
 }
 
 func (idx *Index) ReadEntryAt(position int64) (*IndexEntry, error) {
-	if position < 0 || position >= idx.EntryCount {
+	if position < 0 {
 		return nil, fmt.Errorf("Invalid index entry position")
 	}
 	buffer := make([]byte, 16)
@@ -78,9 +78,6 @@ func (idx *Index) ReadEntryAt(position int64) (*IndexEntry, error) {
 // returnts the index entry for the given offset if it exists,
 // otherwise returns the closest entry with a lower offset
 func (idx *Index) GetEntry(offset int64) (*IndexEntry, bool) {
-	if idx.EntryCount == 0 {
-		return nil, false
-	}
 	low, high := int64(0), idx.EntryCount-1
 	for low <= high {
 		mid := low + (high-low)/2

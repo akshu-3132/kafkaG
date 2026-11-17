@@ -84,16 +84,19 @@ func (sm *SegmentManager) RecoverSegments() error {
 			continue
 		}
 		if filepath.Ext(entry.Name()) == ".log" {
+
 			offsetStr := strings.TrimSuffix(entry.Name(), ".log")
 			offset, err := strconv.ParseInt(offsetStr, 10, 64)
 			if err != nil {
 				return fmt.Errorf("failed to parse offset from log file name: %w", err)
 			}
 			startingOffset := offset
-			segment, err := RecoverSegment(offsetStr, startingOffset)
+			segment, err := RecoverSegment(filepath.Join(sm.DirPath, offsetStr), startingOffset)
+
 			if err != nil {
 				return fmt.Errorf("failed to create segment: %w", err)
 			}
+
 			sm.Segments = append(sm.Segments, segment)
 		}
 	}
