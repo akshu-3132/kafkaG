@@ -10,19 +10,24 @@ import (
 )
 
 type Server struct {
-	addr string
-	log  *storage.FileLog
+	addr           string
+	segmentManager *storage.SegmentManager
 }
 
 func New(addr string) *Server {
-	fl, err := storage.OpenFileLog("./data/test.log")
+	segmentManager, err := storage.NewSegmentManager("./data")
 	if err != nil {
-		fmt.Println("Error opening log:", err)
+		fmt.Println("Error creating segment manager:", err)
+		return nil
+	}
+	segmentManager.RecoverSegments() // Recover segments from disk
+	if err != nil {
+		fmt.Println("Error recovering segments:", err)
 		return nil
 	}
 	return &Server{
-		addr: addr,
-		log:  fl,
+		addr:           addr,
+		segmentManager: segmentManager,
 	}
 }
 
@@ -77,7 +82,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 				Timestamp: time.Now().Unix(),
 				Message:   produceRequest.Message,
 			}
-			offset, err := s.log.Append(record)
+			offset, err := s.segmentManager.WriteRecord(record)
 			if err != nil {
 				fmt.Println("Error appending record:", err)
 				return
@@ -97,7 +102,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 				fmt.Println("Error decoding fetch request:", err)
 				return
 			}
-			record, err := s.log.ReadAt(fetchRequest.Offset)
+			record, err := s.segmentManager.ReadRecord(fetchRequest.Offset)
 			if err != nil {
 				fmt.Println("Error reading record:", err)
 				return
