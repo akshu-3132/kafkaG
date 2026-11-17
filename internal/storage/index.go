@@ -25,7 +25,7 @@ func NewIndex(FilePath string) (*Index, error) {
 	return &Index{
 		File:                  file,
 		LastIndexedByteOffset: 0,
-		IndexInterval:         100000, // in bytes
+		IndexInterval:         1000, // TODO get value from config
 		EntryCount:            0,
 	}, nil
 }
