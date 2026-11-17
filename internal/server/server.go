@@ -20,7 +20,7 @@ func New(addr string) *Server {
 		fmt.Println("Error creating segment manager:", err)
 		return nil
 	}
-	segmentManager.RecoverSegments() // Recover segments from disk
+	err = segmentManager.RecoverSegments() // Recover segments from disk
 	if err != nil {
 		fmt.Println("Error recovering segments:", err)
 		return nil
