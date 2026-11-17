@@ -13,7 +13,7 @@ type Index struct {
 	EntryCount            int64
 }
 
-func NewIndex(FilePath string) (*Index, error) {
+func OpenIndex(FilePath string) (*Index, error) {
 	dirPath := filepath.Dir(FilePath)
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create index directory: %w", err)
@@ -40,6 +40,7 @@ func (idx *Index) ShouldIndexEntry(currentByteOffset int64) bool {
 }
 
 func (idx *Index) AddEntry(Bytes []byte) error {
+	// TODO handle partial failure write here also, rollback ;)
 	bytesToBeWritten := 16
 	if len(Bytes) != bytesToBeWritten {
 		return fmt.Errorf("Invalid index entry size")
