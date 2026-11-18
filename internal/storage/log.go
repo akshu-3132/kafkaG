@@ -12,44 +12,29 @@ import (
 type FileLog struct {
 	File       *os.File
 	ByteOffset int64
-	Index      *Index
-	Offset     int64
 }
 
-func (fl *FileLog) Append(record *Record) (int64, error) {
-	recordBytes, err := record.Encode()
+// appends a record to the end fo the log file
+
+func (fl *FileLog) Append(record *Record) error {
+	// TODO update this method to handle the partial failure write, needs to rollback i guess
+	bbuffer, err := record.Encode()
 	if err != nil {
-		return -1, fmt.Errorf("Error encoding record: %v\n", err)
+		return fmt.Errorf("failed to encode record: %w", err)
 	}
-	recordOffset := fl.Offset
-	recordByteOffset := fl.ByteOffset
-	bytesToWrite := len(recordBytes)
-	for bytesToWrite > 0 {
-		// Writing only remaining bytes to the file to avoid partial writes
-		bytesWritten, err := fl.File.Write(recordBytes[len(recordBytes)-bytesToWrite:])
+	bytesToBeWritten := len(bbuffer)
+	for bytesToBeWritten > 0 {
+		bytesWritten, err := fl.File.Write(bbuffer[len(bbuffer)-bytesToBeWritten:])
 		if err != nil {
-			return -1, fmt.Errorf("Error writing record to file: %v\n", err)
+			return fmt.Errorf("failed to write record to log file: %w", err)
 		}
 		if bytesWritten == 0 {
-
-			return -1, fmt.Errorf("No bytes written to file")
+			return fmt.Errorf("no bytes written to log file")
 		}
-		bytesToWrite -= bytesWritten
+		bytesToBeWritten -= bytesWritten
 	}
-	fl.ByteOffset += int64(len(recordBytes))
-	fl.Offset++
-	if fl.Index.ShouldIndexEntry(recordByteOffset) {
-		indexEntry := &IndexEntry{
-			Offset:     recordOffset,
-			ByteOffset: recordByteOffset,
-		}
-		err := fl.Index.AddEntry(indexEntry.encode())
-		if err != nil {
-			return -1, fmt.Errorf("Error adding index entry: %v\n", err)
-		}
-		fl.Index.LastIndexedByteOffset = recordByteOffset
-	}
-	return recordOffset, nil
+	fl.ByteOffset += int64(len(bbuffer))
+	return nil
 }
 
 func OpenFileLog(filePath string) (*FileLog, error) {
@@ -68,63 +53,9 @@ func OpenFileLog(filePath string) (*FileLog, error) {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	info, err := file.Stat()
-	if err != nil {
-		file.Close()
-		return nil, fmt.Errorf("failed to get file info: %w", err)
-	}
-
-	index, err := NewIndex(filePath + ".idx")
-	if err != nil {
-		file.Close()
-		return nil, fmt.Errorf("failed to create log index: %w", err)
-	}
-
-	// Recover the next offset by starting at the last index entry and
-	// scanning the remaining records.
-	indexInfo, err := index.File.Stat()
-	if err != nil {
-		file.Close()
-		return nil, fmt.Errorf("failed to get index file info: %w", err)
-	}
-
-	entryCount := indexInfo.Size() / 16 // each index entry is 16 bytes
-	index.EntryCount = entryCount
-
-	nextOffset := int64(0)
-	nextByteOffset := int64(0)
-	if entryCount > 0 {
-		lastEntry, err := index.ReadEntryAt(entryCount - 1)
-		if err != nil {
-			file.Close()
-			return nil, fmt.Errorf("failed to read last index entry: %w", err)
-		}
-
-		// lastEntry is the last indexed record so scan forward from it.
-		nextOffset = lastEntry.Offset
-		nextByteOffset = lastEntry.ByteOffset
-		index.LastIndexedByteOffset = nextByteOffset
-
-		header := make([]byte, recordHeaderSize)
-		for nextByteOffset < info.Size() {
-			if _, err := file.ReadAt(header, nextByteOffset); err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				file.Close()
-				return nil, fmt.Errorf("failed to read record header during recovery: %w", err)
-			}
-			messageSize := int64(binary.BigEndian.Uint32(header[8:12]))
-			nextByteOffset += recordHeaderSize + messageSize
-			nextOffset++
-		}
-	}
-
 	return &FileLog{
 		File:       file,
-		ByteOffset: info.Size(),
-		Index:      index,
-		Offset:     nextOffset,
+		ByteOffset: 0,
 	}, nil
 }
 
@@ -135,16 +66,12 @@ func (fl *FileLog) Close() error {
 		if err != nil {
 			return fmt.Errorf("failed to close log file: %w", err)
 		}
-		err = fl.Index.File.Close()
-		if err != nil {
-			return fmt.Errorf("failed to close index file: %w", err)
-		}
 	}
 	return nil
 }
 
 // Read the record from any given byteoffset in the log file
-func (fl *FileLog) Read(byteOffset int64) (*Record, error) {
+func (fl *FileLog) read(byteOffset int64) (*Record, error) {
 	if fl.File == nil {
 		return nil, fmt.Errorf("file is not open")
 	}
@@ -158,7 +85,7 @@ func (fl *FileLog) Read(byteOffset int64) (*Record, error) {
 	}
 	messageSize := uint64(binary.BigEndian.Uint32(header[8:12]))
 
-	const maxMessageSize = 10 * 1024 * 1024
+	const maxMessageSize = 10 * 1024 * 1024 //TODO add message size from config
 	if messageSize > maxMessageSize {
 		return nil, fmt.Errorf("record message too large: %d bytes", messageSize)
 	}
@@ -176,34 +103,26 @@ func (fl *FileLog) Read(byteOffset int64) (*Record, error) {
 	return record, nil
 }
 
-// Finds the record for the given offset
-// if its not present in index, scan the file from the closest index entry
-func (fl *FileLog) ReadAt(offset int64) (*Record, error) {
-	if offset < 0 {
-		return nil, fmt.Errorf("invalid offset: %d", offset)
+// closestRead reads the record with the closest offset to the targetOffset.
+func (fl *FileLog) closestRead(closestIndexEntry *IndexEntry, targetOffset int64) (*Record, error) {
+	if targetOffset < 0 {
+		return nil, fmt.Errorf("invalid offset: %d", targetOffset)
 	}
-
-	byteOffset := int64(0)
-	currentOffset := int64(0)
-
-	entry, exact := fl.Index.GetEntry(offset)
-	if entry != nil {
-		byteOffset = entry.ByteOffset
-		currentOffset = entry.Offset
+	byteOffset := closestIndexEntry.ByteOffset
+	currentOffset := closestIndexEntry.Offset
+	if closestIndexEntry == nil {
+		byteOffset = 0
+		currentOffset = 0
 	}
-	if exact {
-		return fl.Read(byteOffset)
-	}
-
 	for {
-		record, err := fl.Read(byteOffset)
+		record, err := fl.read(byteOffset)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return nil, fmt.Errorf("offset %d not found", offset)
+				return nil, fmt.Errorf("offset %d not found", targetOffset)
 			}
 			return nil, err
 		}
-		if currentOffset == offset {
+		if currentOffset == targetOffset {
 			return record, nil
 		}
 		byteOffset += recordHeaderSize + int64(len(record.Message))

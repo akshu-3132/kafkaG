@@ -13,7 +13,7 @@ type Index struct {
 	EntryCount            int64
 }
 
-func NewIndex(FilePath string) (*Index, error) {
+func OpenIndex(FilePath string) (*Index, error) {
 	dirPath := filepath.Dir(FilePath)
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create index directory: %w", err)
@@ -25,7 +25,7 @@ func NewIndex(FilePath string) (*Index, error) {
 	return &Index{
 		File:                  file,
 		LastIndexedByteOffset: 0,
-		IndexInterval:         100000, // in bytes
+		IndexInterval:         25, // TODO get value from config
 		EntryCount:            0,
 	}, nil
 }
@@ -40,6 +40,7 @@ func (idx *Index) ShouldIndexEntry(currentByteOffset int64) bool {
 }
 
 func (idx *Index) AddEntry(Bytes []byte) error {
+	// TODO handle partial failure write here also, rollback ;)
 	bytesToBeWritten := 16
 	if len(Bytes) != bytesToBeWritten {
 		return fmt.Errorf("Invalid index entry size")
@@ -59,7 +60,7 @@ func (idx *Index) AddEntry(Bytes []byte) error {
 }
 
 func (idx *Index) ReadEntryAt(position int64) (*IndexEntry, error) {
-	if position < 0 || position >= idx.EntryCount {
+	if position < 0 {
 		return nil, fmt.Errorf("Invalid index entry position")
 	}
 	buffer := make([]byte, 16)
@@ -77,9 +78,6 @@ func (idx *Index) ReadEntryAt(position int64) (*IndexEntry, error) {
 // returnts the index entry for the given offset if it exists,
 // otherwise returns the closest entry with a lower offset
 func (idx *Index) GetEntry(offset int64) (*IndexEntry, bool) {
-	if idx.EntryCount == 0 {
-		return nil, false
-	}
 	low, high := int64(0), idx.EntryCount-1
 	for low <= high {
 		mid := low + (high-low)/2
