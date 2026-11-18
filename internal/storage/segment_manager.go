@@ -12,7 +12,7 @@ import (
 type SegmentManager struct {
 	DirPath        string
 	Segments       []*Segment
-	maxSegmentSize int64 // TODO get segment size from config
+	maxSegmentSize int64
 }
 
 // create a new segment manager
@@ -23,8 +23,9 @@ func NewSegmentManager(dirPath string) (*SegmentManager, error) {
 		return nil, err
 	}
 	return &SegmentManager{
-		DirPath:  dirPath,
-		Segments: []*Segment{segment},
+		DirPath:        dirPath,
+		Segments:       []*Segment{segment},
+		maxSegmentSize: 100, // TODO get segment size from config
 	}, nil
 }
 
@@ -42,6 +43,16 @@ func (sm *SegmentManager) CreateSegment(offset int64) (*Segment, error) {
 func (sm *SegmentManager) WriteRecord(record *Record) (int64, error) {
 	// get the last segment
 	lastSegment := sm.Segments[len(sm.Segments)-1]
+
+	if lastSegment.Log.ByteOffset+recordHeaderSize+int64(len(record.Message)) >= sm.maxSegmentSize {
+		newSegment, err := sm.CreateSegment(lastSegment.NextOffset)
+		if err != nil {
+			return -1, err
+		}
+		sm.Segments = append(sm.Segments, newSegment)
+		lastSegment = newSegment
+	}
+
 	offset, err := lastSegment.writeRecord(record)
 	if err != nil {
 		return -1, err
