@@ -13,7 +13,7 @@ type Index struct {
 	EntryCount            int64
 }
 
-func OpenIndex(FilePath string) (*Index, error) {
+func OpenIndex(FilePath string, IndexInterval int64) (*Index, error) {
 	dirPath := filepath.Dir(FilePath)
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create index directory: %w", err)
@@ -25,7 +25,7 @@ func OpenIndex(FilePath string) (*Index, error) {
 	return &Index{
 		File:                  file,
 		LastIndexedByteOffset: 0,
-		IndexInterval:         25, // TODO get value from config
+		IndexInterval:         IndexInterval,
 		EntryCount:            0,
 	}, nil
 }

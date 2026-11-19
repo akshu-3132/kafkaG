@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"kafkaG/internal/config"
 	"path/filepath"
 )
 
@@ -12,12 +13,12 @@ type Segment struct {
 	NextOffset  int64
 }
 
-func NewSegment(dirPath string, offset int64) (*Segment, error) {
+func NewSegment(storageConfig *config.StorageConfig, offset int64) (*Segment, error) {
 	segmentName := fmt.Sprintf("%020d", offset)
-	indexFilePath := filepath.Join(dirPath, segmentName+".index")
-	logFilePath := filepath.Join(dirPath, segmentName+".log")
+	indexFilePath := filepath.Join(storageConfig.DirPath, segmentName+".index")
+	logFilePath := filepath.Join(storageConfig.DirPath, segmentName+".log")
 
-	absPath, err := filepath.Abs(dirPath)
+	absPath, err := filepath.Abs(storageConfig.DirPath)
 	println("Absolute path of the directory:", absPath)
 
 	log, err := OpenFileLog(logFilePath)
@@ -25,11 +26,14 @@ func NewSegment(dirPath string, offset int64) (*Segment, error) {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	index, err := OpenIndex(indexFilePath)
+	index, err := OpenIndex(indexFilePath, storageConfig.IndexInterval)
 	if err != nil {
 		log.File.Close() // Close the log file if index creation fails
 		return nil, err
 	}
+
+	fmt.Println("new segment created with : ")
+	fmt.Println("IndexInterval : ", index.IndexInterval)
 
 	return &Segment{
 		Log:         log,
@@ -81,7 +85,7 @@ func (s *Segment) readRecord(offset int64) (*Record, error) {
 	return record, nil
 }
 
-func RecoverSegment(filePath string, startingOffset int64) (*Segment, error) {
+func RecoverSegment(filePath string, startingOffset int64, IndexInterval int64) (*Segment, error) {
 	logFilePath := filePath + ".log"
 	indexFilePath := filePath + ".index"
 	log, err := OpenFileLog(logFilePath)
@@ -89,7 +93,7 @@ func RecoverSegment(filePath string, startingOffset int64) (*Segment, error) {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
 	}
 
-	index, err := OpenIndex(indexFilePath)
+	index, err := OpenIndex(indexFilePath, IndexInterval)
 	if err != nil {
 		log.File.Close() // Close the log file if index creation fails
 		return nil, err
