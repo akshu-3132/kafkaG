@@ -2,36 +2,39 @@ package storage
 
 import (
 	"fmt"
+	"kafkaG/internal/config"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 )
 
-// TODO segment recovery
 type SegmentManager struct {
-	DirPath        string
-	Segments       []*Segment
-	maxSegmentSize int64
+	DirPath       string
+	Segments      []*Segment
+	StorageConfig *config.StorageConfig
 }
 
 // create a new segment manager
-func NewSegmentManager(dirPath string) (*SegmentManager, error) {
+func NewSegmentManager(dirPath string, storageConfig *config.StorageConfig) (*SegmentManager, error) {
 	//create segment with offset 0 for the first ime
-	segment, err := NewSegment(dirPath, 0)
+	segment, err := NewSegment(storageConfig, 0)
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Println("Max segment size : ", storageConfig.MaxSegmentSize)
+
 	return &SegmentManager{
-		DirPath:        dirPath,
-		Segments:       []*Segment{segment},
-		maxSegmentSize: 100, // TODO get segment size from config
+		DirPath:       dirPath,
+		Segments:      []*Segment{segment},
+		StorageConfig: storageConfig,
 	}, nil
 }
 
 // create a new segmment
 func (sm *SegmentManager) CreateSegment(offset int64) (*Segment, error) {
-	segment, err := NewSegment(sm.DirPath, offset)
+	segment, err := NewSegment(sm.StorageConfig, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +47,7 @@ func (sm *SegmentManager) WriteRecord(record *Record) (int64, error) {
 	// get the last segment
 	lastSegment := sm.Segments[len(sm.Segments)-1]
 
-	if lastSegment.Log.ByteOffset+recordHeaderSize+int64(len(record.Message)) >= sm.maxSegmentSize {
+	if lastSegment.Log.ByteOffset+recordHeaderSize+int64(len(record.Message)) >= sm.StorageConfig.MaxSegmentSize {
 		newSegment, err := sm.CreateSegment(lastSegment.NextOffset)
 		if err != nil {
 			return -1, err
@@ -102,7 +105,7 @@ func (sm *SegmentManager) RecoverSegments() error {
 				return fmt.Errorf("failed to parse offset from log file name: %w", err)
 			}
 			startingOffset := offset
-			segment, err := RecoverSegment(filepath.Join(sm.DirPath, offsetStr), startingOffset)
+			segment, err := RecoverSegment(filepath.Join(sm.DirPath, offsetStr), startingOffset, sm.StorageConfig.IndexInterval)
 
 			if err != nil {
 				return fmt.Errorf("failed to create segment: %w", err)

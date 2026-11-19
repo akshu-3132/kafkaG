@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"io"
+	"kafkaG/internal/config"
 	"kafkaG/internal/protocol"
 	"kafkaG/internal/storage"
 	"net"
@@ -12,10 +13,16 @@ import (
 type Server struct {
 	addr           string
 	segmentManager *storage.SegmentManager
+	config         *config.Config
 }
 
 func New(addr string) *Server {
-	segmentManager, err := storage.NewSegmentManager("./data")
+	config, err := config.LoadConfig("/home/akshu/projects/kafkaG/configs/broker.yaml")
+	if err != nil {
+		fmt.Println("Error loading config:", err)
+		return nil
+	}
+	segmentManager, err := storage.NewSegmentManager(config.StorageConfig.DirPath, &config.StorageConfig)
 	if err != nil {
 		fmt.Println("Error creating segment manager:", err)
 		return nil
@@ -28,6 +35,7 @@ func New(addr string) *Server {
 	return &Server{
 		addr:           addr,
 		segmentManager: segmentManager,
+		config:         config,
 	}
 }
 
