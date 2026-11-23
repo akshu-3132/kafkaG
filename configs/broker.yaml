@@ -1,5 +1,5 @@
 storage:
   dir_path: "./data"
-  max_segment_size: 80
-  index_interval:  30
+  max_segment_size: 67108864 # 64MB
+  index_interval:  4096      # 4KB
   max_message_size:  1000000

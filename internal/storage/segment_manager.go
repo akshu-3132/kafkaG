@@ -7,9 +7,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type SegmentManager struct {
+	mu            sync.Mutex
 	DirPath       string
 	Segments      []*Segment
 	StorageConfig *config.StorageConfig
@@ -33,7 +35,7 @@ func NewSegmentManager(dirPath string, storageConfig *config.StorageConfig) (*Se
 }
 
 // create a new segmment
-func (sm *SegmentManager) CreateSegment(offset int64) (*Segment, error) {
+func (sm *SegmentManager) createSegment(offset int64) (*Segment, error) {
 	segment, err := NewSegment(sm.StorageConfig, offset)
 	if err != nil {
 		return nil, err
@@ -44,15 +46,18 @@ func (sm *SegmentManager) CreateSegment(offset int64) (*Segment, error) {
 
 // writeRecord
 func (sm *SegmentManager) WriteRecord(record *Record) (int64, error) {
+	// lock the write to ensure thread safety
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
 	// get the last segment
 	lastSegment := sm.Segments[len(sm.Segments)-1]
 
 	if lastSegment.Log.ByteOffset+recordHeaderSize+int64(len(record.Message)) >= sm.StorageConfig.MaxSegmentSize {
-		newSegment, err := sm.CreateSegment(lastSegment.NextOffset)
+		newSegment, err := sm.createSegment(lastSegment.NextOffset)
 		if err != nil {
 			return -1, err
 		}
-		sm.Segments = append(sm.Segments, newSegment)
 		lastSegment = newSegment
 	}
 
