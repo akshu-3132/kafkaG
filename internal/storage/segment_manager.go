@@ -25,7 +25,7 @@ func NewSegmentManager(dirPath string, storageConfig *config.StorageConfig) (*Se
 		return nil, err
 	}
 
-	fmt.Println("Max segment size : ", storageConfig.MaxSegmentSize)
+	// fmt.Println("Max segment size : ", storageConfig.MaxSegmentSize)
 
 	return &SegmentManager{
 		DirPath:       dirPath,
