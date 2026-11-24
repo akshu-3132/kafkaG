@@ -18,9 +18,6 @@ func NewSegment(storageConfig *config.StorageConfig, offset int64) (*Segment, er
 	indexFilePath := filepath.Join(storageConfig.DirPath, segmentName+".index")
 	logFilePath := filepath.Join(storageConfig.DirPath, segmentName+".log")
 
-	absPath, err := filepath.Abs(storageConfig.DirPath)
-	println("Absolute path of the directory:", absPath)
-
 	log, err := OpenFileLog(logFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
@@ -32,8 +29,8 @@ func NewSegment(storageConfig *config.StorageConfig, offset int64) (*Segment, er
 		return nil, err
 	}
 
-	fmt.Println("new segment created with : ")
-	fmt.Println("IndexInterval : ", index.IndexInterval)
+	// fmt.Println("new segment created with : ")
+	// fmt.Println("IndexInterval : ", index.IndexInterval)
 
 	return &Segment{
 		Log:         log,
