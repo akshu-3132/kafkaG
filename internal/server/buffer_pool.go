@@ -63,3 +63,21 @@ func (bp *BufferPool) allocateBuffer(size int) []byte {
 	bp.currentBytesUsed += int64(size) * 1024
 	return make([]byte, size*1024)
 }
+
+func (bp *BufferPool) ReturnBuffer(buffer []byte) {
+	bufferCap := cap(buffer)
+	size := bufferCap / 1024
+
+	if size < 4 || size > 16*1024 {
+		return
+	}
+
+	idx := bits.TrailingZeros(uint(size))
+	idx = idx - 2
+
+	bp.mu[idx].Lock()
+	defer bp.mu[idx].Unlock()
+
+	buffer = buffer[:bufferCap]
+	bp.Buffers[idx] = append(bp.Buffers[idx], buffer)
+}
