@@ -25,18 +25,30 @@ func NewBufferPool(maxBytesAllowed int64) *BufferPool {
 
 func (bp *BufferPool) GetBuffer(size int) []byte {
 
-	idx := bits.TrailingZeros(uint(size))
-	idx = idx - 2
-
-	if size < 4 || size > 16*1024 {
+	if size > 16*1024*1024 || size <= 0 {
 		return nil
+	}
+
+	var nearestPowerOfTwo, idx int
+
+	if size <= 4*1024 {
+		nearestPowerOfTwo = 4 * 1024
+		idx = 0
+	} else {
+		nearestPowerOfTwo = 1 << (bits.Len(uint(size - 1)))
+		idx = bits.TrailingZeros(uint(nearestPowerOfTwo))
+		idx = idx - 12 // 4KB = 0
 	}
 
 	bp.mu[idx].Lock()
 	defer bp.mu[idx].Unlock()
 
 	if len(bp.Buffers[idx]) == 0 {
-		return bp.allocateBuffer(size)
+		buffer := bp.allocateBuffer(nearestPowerOfTwo)
+		if buffer == nil {
+			return nil
+		}
+		return buffer[:size] // Return a slice of the requested size
 	}
 
 	lastIdx := len(bp.Buffers[idx]) - 1
@@ -45,39 +57,42 @@ func (bp *BufferPool) GetBuffer(size int) []byte {
 	bp.Buffers[idx][lastIdx] = nil
 	bp.Buffers[idx] = bp.Buffers[idx][:lastIdx]
 
-	return buffer
+	return buffer[:size] // Return a slice of the requested size
 }
 
 func (bp *BufferPool) allocateBuffer(size int) []byte {
-	if size < 4 || size > 16*1024 {
+	if size < 4*1024 || size > 16*1024*1024 {
 		return nil
 	}
 
 	bp.bytesmu.Lock()
 	defer bp.bytesmu.Unlock()
 
-	if bp.currentBytesUsed+int64(size)*1024 > bp.maxBytesAllowed {
+	if bp.currentBytesUsed+int64(size) > bp.maxBytesAllowed {
 		return nil
 	}
 
-	bp.currentBytesUsed += int64(size) * 1024
-	return make([]byte, size*1024)
+	bp.currentBytesUsed += int64(size)
+	return make([]byte, size)
 }
 
 func (bp *BufferPool) ReturnBuffer(buffer []byte) {
 	bufferCap := cap(buffer)
-	size := bufferCap / 1024
 
-	if size < 4 || size > 16*1024 {
+	if bufferCap < 4*1024 || bufferCap > 16*1024*1024 {
 		return
 	}
 
-	idx := bits.TrailingZeros(uint(size))
-	idx = idx - 2
+	if bufferCap&(bufferCap-1) != 0 {
+		return
+	}
+
+	idx := bits.TrailingZeros(uint(bufferCap))
+	idx = idx - 12 // 4KB = 0
+
+	buffer = buffer[:bufferCap] // Reset the slice to its full capacity
 
 	bp.mu[idx].Lock()
 	defer bp.mu[idx].Unlock()
-
-	buffer = buffer[:bufferCap]
 	bp.Buffers[idx] = append(bp.Buffers[idx], buffer)
 }
