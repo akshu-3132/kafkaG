@@ -1,38 +1,35 @@
 package server
 
 import (
+	"encoding/binary"
 	"fmt"
 	"kafkaG/internal/protocol"
+	"net"
 )
 
 const (
-	APIKeyProduce int16 = 1
-
-	ErrorCodeNone           int16 = 0
-	ErrorCodeInvalidRequest int16 = 1
-	ErrorCodeUnsupportedAPI int16 = 2
+	APIKeyProduce uint16 = 1
 )
 
-func (s *Server) handleRequest(
-	req *protocol.Request,
-) (*protocol.Response, error) {
-	resp := &protocol.Response{
-		CorrelationID: req.CorrelationID,
-		ErrorCode:     ErrorCodeNone,
-	}
-
-	switch req.APIKey {
-	case APIKeyProduce:
-		_, err := protocol.DecodeProduceRequest(req.Body)
-		if err != nil {
-			resp.ErrorCode = ErrorCodeInvalidRequest
-			return resp, nil
+func (s *Server) handleRequest(conn net.Conn) error {
+	defer conn.Close()
+	var header [4]byte
+	var apiKey uint16
+	for {
+		buffer, err := protocol.Read(conn, header[:], s.BufferPool)
+		if err != nil || buffer == nil {
+			return fmt.Errorf("error reading")
 		}
-		// fmt.Println("Message : " + string(req.Body))
-		return resp, nil
 
-	default:
-		resp.ErrorCode = ErrorCodeUnsupportedAPI
-		return resp, fmt.Errorf("unsupported API key: %d", req.APIKey)
+		apiKey = binary.BigEndian.Uint16(buffer[0:2])
+
+		if apiKey == APIKeyProduce {
+			fmt.Println("Received produce request")
+		}
+
+		//TODO sending temporary response to make it working
+		s.BufferPool.ReturnBuffer(buffer)
+
 	}
+
 }

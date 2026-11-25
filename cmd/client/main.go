@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// TODO update the client with new bufferpool
 func main() {
 	conn, err := net.Dial("tcp", "localhost:9092")
 	if err != nil {
@@ -63,17 +64,7 @@ func main() {
 				fmt.Println("Failed to send request:", err)
 				return
 			}
-			responseFrame, err := protocol.ReadFrame(conn)
-			if err != nil {
-				fmt.Println("Failed to read response:", err)
-				return
-			}
-			decodedResponse, err := protocol.DecodeResponse(responseFrame.Payload)
-			if err != nil {
-				fmt.Println("Failed to decode response:", err)
-				return
-			}
-			fmt.Println("Decoded response:", string(decodedResponse.Body))
+			// TODO read reponse from the server after deciding the response architechture
 		case 2:
 			fmt.Print("Enter offset to fetch: ")
 
