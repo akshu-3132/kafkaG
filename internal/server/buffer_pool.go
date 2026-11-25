@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"math/bits"
 	"sync"
 )
@@ -8,6 +9,7 @@ import (
 // It will contain buffer of different sizes in the power of 2
 // it will have minimum baseline number of buffers for each size
 
+// TODO add some baseline buffers to avoid warmups
 type BufferPool struct {
 	mu               [13]sync.Mutex
 	bytesmu          sync.Mutex
@@ -43,6 +45,8 @@ func (bp *BufferPool) GetBuffer(size int) []byte {
 	bp.mu[idx].Lock()
 	defer bp.mu[idx].Unlock()
 
+	//TODO add functionality to check whether buffer can be allocated or not
+	//! ie deleting the buffer from memory
 	if len(bp.Buffers[idx]) == 0 {
 		buffer := bp.allocateBuffer(nearestPowerOfTwo)
 		if buffer == nil {
@@ -72,7 +76,9 @@ func (bp *BufferPool) allocateBuffer(size int) []byte {
 		return nil
 	}
 
+	fmt.Println("becfore bytes used in KB ", bp.currentBytesUsed/1024)
 	bp.currentBytesUsed += int64(size)
+	fmt.Println("after bytes used : ", bp.currentBytesUsed/1024)
 	return make([]byte, size)
 }
 
